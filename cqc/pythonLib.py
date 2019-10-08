@@ -182,7 +182,8 @@ class CQCConnection:
 
     def __init__(self, name, socket_address=None, appID=None, pend_messages=False,
                  retry_connection=True, conn_retry_time=0.1, log_level=None, backend=None,
-                 use_classical_communication=True, network_name=None, handler='TCP'):
+                 use_classical_communication=True, network_name=None, handler='TCP',
+                 filename='CQC_output'):
         """
         Initialize a connection to the cqc server.
 
@@ -297,7 +298,7 @@ class CQCConnection:
             self.handler = SocketHandler(self)
         
         if handler == 'file':
-            self.handler = FileHandler()
+            self.handler = FileHandler(filename)
 
         # List of pending messages waiting to be send to the back-end
         self.pend_messages = pend_messages
@@ -1918,7 +1919,7 @@ class qubit:
             self._cqc.sendCommand(self._qID, CQC_CMD_RESET, notify=int(notify), block=int(block))
             if notify:
                 message = self._cqc.readMessage()
-                self._cqc.pri"editor.rulers": [80,120]nt_CQC_msg(message)
+                self._cqc.print_CQC_msg(message)
 
     def release(self, notify=True, block=False):
         """
@@ -2001,5 +2002,14 @@ class FileHandler:
     """This class gets used when writing CQC instructions to file"""
 
 
-    def __init__():
-        pass
+    def __init__(self, filename):
+        script_dir = os.path.dirname(__file__)
+        self.filename = os.path.join(filename, script_dir) 
+
+    def send(self, msg):
+
+        with open(self.filename, a) as f:
+            f.write(msg + '\n')
+
+    def recv(self, recv_size):
+        raise NotImplementedError('recv() method not implemented for FileHandler')
