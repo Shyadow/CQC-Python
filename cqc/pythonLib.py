@@ -88,6 +88,7 @@ from cqc.cqcHeader import (
     CQC_TP_EPR_OK,
     CQC_TP_NEW_OK,
     CQC_TP_EXPIRE,
+    CQC_XTRA_QUBIT_HDR_LENGTH,
 )
 from cqc.entInfoHeader import EntInfoHeader
 from cqc.hostConfig import cqc_node_id_from_addrinfo
@@ -1969,6 +1970,10 @@ class Handler(ABC):
     def recv(self, maxsize):
         pass
 
+    @abstractmethod
+    def close(self):
+        pass
+
 class SocketHandler(Handler):
     """Handles socket"""
 
@@ -1997,19 +2002,50 @@ class SocketHandler(Handler):
     def recv(self, recv_size):
         self.socket.recv(recv_size)
 
+    def close(self):
+        self.socket.close()
+
 
 class FileHandler:
     """This class gets used when writing CQC instructions to file"""
 
 
     def __init__(self, filename):
-        script_dir = os.path.dirname(__file__)
-        self.filename = os.path.join(filename, script_dir) 
+        script_dir = sys.path[0]
+        self.filename = os.path.join(script_dir, filename) 
+        self.recvnum = 0
 
     def send(self, msg):
 
-        with open(self.filename, a) as f:
-            f.write(msg + '\n')
+        with open(self.filename, 'a') as f:
+            f.write(str(msg) + '\n')
 
     def recv(self, recv_size):
-        raise NotImplementedError('recv() method not implemented for FileHandler')
+        
+        if self.recvnum == 0:
+            # CQC header
+            hdr = CQCHeader()
+            #appID set to 0
+            hdr.setVals(CQC_VERSION, CQC_TP_NEW_OK, 0, CQC_XTRA_QUBIT_HDR_LENGTH)
+            cqc_msg = hdr.pack()
+
+            # Extra Qubit header
+            cmd_hdr = CQCXtraQubitHeader()
+            #qubit_id
+            cmd_hdr.setVals(0)
+            cmd_msg = cmd_hdr.pack()
+
+            self.recvnum += 1
+
+            return cqc_msg + cmd_msg
+        
+        else:
+            hdr = CQCHeader()
+            hdr.setVals(CQC_VERSION, CQC_TP_DONE, 0, 0)
+            msg = hdr.pack()
+
+            return msg
+
+
+    def close(self):
+        pass
