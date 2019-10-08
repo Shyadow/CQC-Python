@@ -34,6 +34,7 @@ import time
 import logging
 import socket
 import warnings
+from abc import ABC, abstractmethod
 
 from cqc.cqcHeader import (
     Header,
@@ -181,7 +182,7 @@ class CQCConnection:
 
     def __init__(self, name, socket_address=None, appID=None, pend_messages=False,
                  retry_connection=True, conn_retry_time=0.1, log_level=None, backend=None,
-                 use_classical_communication=True, network_name=None):
+                 use_classical_communication=True, network_name=None, handler='TCP'):
         """
         Initialize a connection to the cqc server.
 
@@ -209,6 +210,8 @@ class CQCConnection:
                 Whether to use the built-in classical communication or not.
             :param network_name: None or str
                 Used if simulaqron is used to load socket addresses for the backend
+            :param handler: 'TCP' or 'file'
+                Whether to write the CQC to file or send via TCP.
         """
         self._setup_logging(log_level)
 
@@ -289,24 +292,12 @@ class CQCConnection:
             except Exception:
                 raise TypeError("When specifying the socket address, this should be a tuple (str,int).")
 
-        self._s = None
-        while True:
-            try:
-                logging.debug("App {} : Trying to connect to CQC server".format(self.name))
-
-                self._s = socket.socket(addr[0], addr[1], addr[2])
-                self._s.connect(addr[4])
-                break
-            except ConnectionRefusedError as err:
-                logging.debug("App {} : Could not connect to  CQC server, trying again...".format(self.name))
-                time.sleep(self._conn_retry_time)
-                self._s.close()
-                if not retry_connection:
-                    raise err
-            except Exception as err:
-                logging.warning("App {} : Critical error when connection to CQC server: {}".format(self.name, err))
-                self._s.close()
-                raise err
+        self.handler = None
+        if handler == 'TCP':
+            self.handler = SocketHandler(self)
+        
+        if handler == 'file':
+            self.handler = FileHandler()
 
         # List of pending messages waiting to be send to the back-end
         self.pend_messages = pend_messages
@@ -353,7 +344,7 @@ class CQCConnection:
         """
         if release_qubits:
             self.release_all_qubits()
-        self._s.close()
+        self.handler.close()
         try:
             self._appIDs[self.name].remove(self._appID)
         except ValueError:
@@ -493,7 +484,7 @@ class CQCConnection:
         hdr = CQCHeader()
         hdr.setVals(CQC_VERSION, tp, self._appID, 0)
         msg = hdr.pack()
-        self._s.send(msg)
+        self.handler.send(msg)
 
     def sendCommand(self, qID, command, notify=1, block=1, action=0):
         """
@@ -511,13 +502,13 @@ class CQCConnection:
         hdr = CQCHeader()
         hdr.setVals(CQC_VERSION, CQC_TP_COMMAND, self._appID, CQC_CMD_HDR_LENGTH)
         msg = hdr.pack()
-        self._s.send(msg)
+        self.handler.send(msg)
 
         # Send Command
         cmd_hdr = CQCCmdHeader()
         cmd_hdr.setVals(qID, command, notify, block, action)
         cmd_msg = cmd_hdr.pack()
-        self._s.send(cmd_msg)
+        self.handler.send(cmd_msg)
 
     def sendCmdXtra(
         self,
@@ -579,7 +570,7 @@ class CQCConnection:
         cmd_msg = cmd_hdr.pack()
 
         # Send headers
-        self._s.send(msg + cmd_msg + xtra_msg)
+        self.handler.send(msg + cmd_msg + xtra_msg)
 
     def sendGetTime(self, qID, notify=1, block=1, action=0):
         """
@@ -597,13 +588,13 @@ class CQCConnection:
         hdr = CQCHeader()
         hdr.setVals(CQC_VERSION, CQC_TP_GET_TIME, self._appID, CQC_CMD_HDR_LENGTH)
         msg = hdr.pack()
-        self._s.send(msg)
+        self.handler.send(msg)
 
         # Send Command
         cmd_hdr = CQCCmdHeader()
         cmd_hdr.setVals(qID, 0, notify, block, action)
         cmd_msg = cmd_hdr.pack()
-        self._s.send(cmd_msg)
+        self.handler.send(cmd_msg)
 
     def allocate_qubits(self, num_qubits, notify=True, block=True):
         """
@@ -624,7 +615,7 @@ class CQCConnection:
         cmd_hdr.setVals(num_qubits, CQC_CMD_ALLOCATE, int(notify), int(block), 0)
         cmd_msg = cmd_hdr.pack()
 
-        self._s.send(cqc_msg + cmd_msg)
+        self.handler.send(cqc_msg + cmd_msg)
         qubits = []
         for _ in range(num_qubits):
             msg = self.readMessage()
@@ -689,7 +680,7 @@ class CQCConnection:
                 seq_hdr.setVals(hdr_length * (n - i - 1))
                 release_messages += seq_hdr.pack()
 
-        self._s.send(cqc_msg + release_messages)
+        self.handler.send(cqc_msg + release_messages)
 
         if notify:
             msg = self.readMessage()
@@ -782,7 +773,7 @@ class CQCConnection:
         logging.debug("App {} sends CQC message {}".format(self.name, cmd_hdr.printable()))
         if xtra_hdr:
             logging.debug("App {} sends CQC message {}".format(self.name, xtra_hdr.printable()))
-        self._s.send(msg + factory_msg + cmd_msg + xtra_msg)
+        self.handler.send(msg + factory_msg + cmd_msg + xtra_msg)
 
         # Get RECV messages
         # Some commands expect to get a list of messages back, check those
@@ -825,7 +816,7 @@ class CQCConnection:
             # If buf does not contain enough data, read in more
             if checkedBuf:
                 # Receive data
-                data = self._s.recv(maxsize)
+                data = self.handler.recv(maxsize)
 
                 # Read whatever we received into a buffer
                 if self.buf:
@@ -1308,7 +1299,7 @@ class CQCConnection:
             # send the headers
             for header in pending_headers:
                 logging.debug("App {} sends CQC: {}".format(self.name, header.printable()))
-                self._s.send(header.pack())
+                self.handler.send(header.pack())
 
                 # Read out any returned messages from the backend
             for i in range(num_iter):
@@ -1927,7 +1918,7 @@ class qubit:
             self._cqc.sendCommand(self._qID, CQC_CMD_RESET, notify=int(notify), block=int(block))
             if notify:
                 message = self._cqc.readMessage()
-                self._cqc.print_CQC_msg(message)
+                self._cqc.pri"editor.rulers": [80,120]nt_CQC_msg(message)
 
     def release(self, notify=True, block=False):
         """
@@ -1962,3 +1953,53 @@ class qubit:
             return otherHdr.datetime
         except AttributeError:
             return None
+
+
+class Handler(ABC):
+    """This class is to be subclassed by the various handlers. 
+    It defines which methods those classes must have.
+    """
+
+    @abstractmethod
+    def send(self, msg):
+        pass
+    
+    @abstractmethod
+    def recv(self, maxsize):
+        pass
+
+class SocketHandler(Handler):
+    """Handles socket"""
+
+    def __init__(self, cqc):
+        while True:
+            try:
+                logging.debug("App {} : Trying to connect to CQC server".format(self.cqc.name))
+            
+                self.socket = socket.socket(addr[0], addr[1], addr[2])
+                self.socket.connect(addr[4])
+                break
+            except ConnectionRefusedError as err:
+                logging.debug("App {} : Could not connect to  CQC server, trying again...".format(self.cqc.name))
+                time.sleep(self.cqc._conn_retry_time)
+                self.socket.close()
+                if not retry_connection:
+                    raise err
+            except Exception as err:
+                logging.warning("App {} : Critical error when connection to CQC server: {}".format(self.cqc.name, err))
+                self.socket.close()
+                raise err
+
+    def send(self, msg):
+        self.socket.send(msg)
+
+    def recv(self, recv_size):
+        self.socket.recv(recv_size)
+
+
+class FileHandler:
+    """This class gets used when writing CQC instructions to file"""
+
+
+    def __init__():
+        pass
