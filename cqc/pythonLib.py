@@ -1502,7 +1502,15 @@ class qubit:
         self._active = None
 
         if createNew:
-            if cqc.pend_messages:
+            if type(self._cqc) is CQCToFile:
+
+                self._cqc.sendCommand(0, CQC_CMD_NEW, notify=int(notify), block=int(block))
+
+                self._qID = self._cqc.new_qubitID()
+
+                self._set_active(True)
+
+            elif cqc.pend_messages:
                 # print info
                 logging.debug("App {} pends message:'Create qubit'".format(self._cqc.name))
 
@@ -1607,7 +1615,6 @@ class qubit:
         else:
             if self in self._cqc.active_qubits:
                 self._cqc.active_qubits.remove(self)
-
         self._active = be_active
 
     def _single_qubit_gate(self, command, notify, block):
@@ -1620,7 +1627,11 @@ class qubit:
         # check if qubit is active
         self.check_active()
 
-        if self._cqc.pend_messages:
+        if type(self._cqc) is CQCToFile:
+            
+            self._cqc.sendCommand(self._qID, command, notify=int(notify), block=int(block))
+
+        elif self._cqc.pend_messages:
             # print info
             logging.debug(
                 "App {} pends message: 'Send command {} for qubit with ID {}'".format(
@@ -1736,7 +1747,11 @@ class qubit:
         # check if qubit is active
         self.check_active()
 
-        if self._cqc.pend_messages:
+        if type(self._cqc) is CQCToFile:
+
+            self._cqc.sendCmdXtra(self._qID, command, step=step, notify=int(notify), block=int(block))
+
+        elif self._cqc.pend_messages:
             # print info
             logging.debug(
                 "App {} pends message: 'Perform rotation command {} (angle {}*2pi/256) to qubit with ID {}'".format(
@@ -1813,7 +1828,11 @@ class qubit:
         if self == target:
             raise CQCUnsuppError("Cannot perform multi qubit operation where control and target are the same")
 
-        if self._cqc.pend_messages:
+        if type(self._cqc) is CQCToFile:
+
+            self._cqc.sendCmdXtra(self._qID, command, notify=int(notify), block=int(block), xtra_qID=target._qID)
+
+        elif self._cqc.pend_messages:
             # print info
             logging.debug(
                 "App {} pends message: 'Perform CNOT to qubits with IDs {}(control) {}(target)'".format(
@@ -1881,7 +1900,17 @@ class qubit:
         else:
             command = CQC_CMD_MEASURE
 
-        if self._cqc.pend_messages:
+        if type(self._cqc) is CQCToFile:
+
+            self._cqc.sendCommand(self._qID, command, notify=0, block=int(block))
+
+            if not inplace:
+                self._set_active(False)
+
+            # Always returns 0 as measurement outcome
+            return 0    
+
+        elif self._cqc.pend_messages:
             self._cqc.pending_messages.append([self, command, 0, int(block)])
             # print info
             logging.debug("App {} pends message: 'Measure qubit with ID {}'".format(self._cqc.name, self._qID))
@@ -1915,7 +1944,11 @@ class qubit:
         # check if qubit is active
         self.check_active()
 
-        if self._cqc.pend_messages:
+        if type(self._cqc) is CQCToFile:
+
+            self._cqc.sendCommand(self._qID, CQC_CMD_RESET, notify=int(notify), block=int(block))
+
+        elif self._cqc.pend_messages:
             # print info
             logging.debug("App {} pends message: 'Reset qubit with ID {}'".format(self._cqc.name, self._qID))
 
@@ -1962,3 +1995,192 @@ class qubit:
             return otherHdr.datetime
         except AttributeError:
             return None
+
+
+class CQCToFile:
+    """Used when writing CQC commands to file.
+    """
+
+    def __init__(self, filename='CQC-File', pend_messages=False):
+        
+        # Set path of file to write to
+        script_dir = sys.path[0]
+        self.filename = os.path.join(script_dir, filename)
+
+        # Decides if to send each command as it is received, or all at once
+        self.pend_messages = pend_messages
+
+        # Set an app ID
+        self._appID = 42
+
+        self.next_qubitID = 0
+
+        self.name = "CQCToFile"
+
+        self.active_qubits = []
+
+    def __enter__(self):
+        # This flag is used to check if CQCToFile is opened using a 'with' statement.
+        # Otherwise an deprecation warning is printed when instantiating qubits.
+        self._opened_with_with = True
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        # All qubits should now be released
+        self.close(release_qubits=True)
+
+    def write(self, msg):
+        """Writes a message to file
+
+        Message is written as the bytes turned into a string.
+        """
+
+        with open(self.filename, 'a') as f:
+            f.write(str(msg) + '\n')
+
+
+    def sendCommand(self, qID, command, notify=1, block=1, action=0):
+        """
+        Constructs and writes command.
+
+        - **Arguments**
+
+            :qID:        qubit ID
+            :command:    Command to be executed, eg CQC_CMD_H
+            :nofify:    Do we wish to be notified when done.
+            :block:        Do we want the qubit to be blocked
+            :action:    Are there more commands to be executed
+        """
+
+        # Construct and write Header
+        hdr = CQCHeader()
+        hdr.setVals(CQC_VERSION, CQC_TP_COMMAND, self._appID, CQC_CMD_HDR_LENGTH)
+        msg = hdr.pack()
+        self.write(msg)
+
+        # Construct and write Command
+        cmd_hdr = CQCCmdHeader()
+        cmd_hdr.setVals(qID, command, notify, block, action)
+        cmd_msg = cmd_hdr.pack()
+        self.write(cmd_msg)
+
+    def new_qubitID(self):
+        """This method assigns a qubit ID to new qubits.
+        """
+
+        qubitID = self.next_qubitID
+
+        self.next_qubitID += 1
+
+        return qubitID
+    
+    def sendCmdXtra(self, qID, command, notify=1, block=1, action=0, xtra_qID=0, 
+                    step=0, remote_appID=0, remote_node=0, remote_port=0):
+        """
+        Sends a simple message, command message and xtra message to the cqc server.
+
+        - **Arguments**
+
+            :qID:         qubit ID
+            :command:     Command to be executed, eg CQC_CMD_H
+            :nofify:     Do we wish to be notified when done.
+            :block:         Do we want the qubit to be blocked
+            :action:     Are there more commands to be executed
+            :xtra_qID:     Extra qubit ID for for example CNOT
+            :step:         Defines the angle of rotation.
+            :remote_appID:     Application ID of remote host
+            :remote_node:     ip of remote host in cqc network
+            :remote_port:     port of remote host in cqc network
+        """
+
+        # Check what extra header we require
+        xtra_hdr = None
+        if command == CQC_CMD_SEND or command == CQC_CMD_EPR:
+            xtra_hdr = CQCCommunicationHeader()
+            xtra_hdr.setVals(remote_appID, remote_node, remote_port)
+        elif command == CQC_CMD_CNOT or command == CQC_CMD_CPHASE:
+            xtra_hdr = CQCXtraQubitHeader()
+            xtra_hdr.setVals(xtra_qID)
+        elif command == CQC_CMD_ROT_X or command == CQC_CMD_ROT_Y or command == CQC_CMD_ROT_Z:
+            xtra_hdr = CQCRotationHeader()
+            xtra_hdr.setVals(step)
+
+        if xtra_hdr is None:
+            header_length = CQC_CMD_HDR_LENGTH
+            xtra_msg = b""
+        else:
+            xtra_msg = xtra_hdr.pack()
+            header_length = CQC_CMD_HDR_LENGTH + xtra_hdr.HDR_LENGTH
+
+        # Construct Header
+        hdr = CQCHeader()
+        hdr.setVals(CQC_VERSION, CQC_TP_COMMAND, self._appID, header_length)
+        msg = hdr.pack()
+
+        # Construct Command
+        cmd_hdr = CQCCmdHeader()
+        cmd_hdr.setVals(qID, command, notify, block, action)
+        cmd_msg = cmd_hdr.pack()
+
+        # Send headers
+        self.write(msg + cmd_msg + xtra_msg)
+
+    def close(self, release_qubits=True):
+        """Releases all qubits
+        """
+        if release_qubits:
+            self.release_all_qubits()
+        
+    def release_all_qubits(self):
+        """
+        Releases all qubits off this connection
+        """
+        return self.release_qubits(self.active_qubits[:])
+
+    def release_qubits(self, qubits, notify=True, block=False, action=False):
+        """
+        Release qubits so backend can free them up for other uses
+        :param qubits: a list of qubits to be released
+        :param notify:     Do we wish to be notified when done.
+        :param block:         Do we want the qubit to be blocked
+        :param action:     Execute the releases recursively or sequencely
+        """
+
+        if isinstance(qubits, qubit):
+            qubits = [qubits]
+        assert isinstance(qubits, list)
+        n = len(qubits)
+
+        if n == 0:  # then we don't need to do anything
+            return
+
+        
+        if action:
+            hdr_length = CQCCmdHeader.HDR_LENGTH + CQCSequenceHeader.HDR_LENGTH
+        else:
+            hdr_length = CQCCmdHeader.HDR_LENGTH
+        hdr = CQCHeader()
+        hdr.setVals(CQC_VERSION, CQC_TP_COMMAND, self._appID, hdr_length * n)
+        cqc_msg = hdr.pack()
+
+        release_messages = b""
+
+        for i in range(n):
+            q = qubits[i]
+            try:
+                q.check_active()
+            except QubitNotActiveError as e:
+                raise QubitNotActiveError(
+                    str(e) + ". Qubit {} is not active. None of the qubits are released".format(q._qID)
+                )
+            q._set_active(False)
+            cmd_hdr = CQCCmdHeader()
+            cmd_hdr.setVals(q._qID, CQC_CMD_RELEASE, int(notify), int(block), int(action))
+            release_messages += cmd_hdr.pack()
+            if action:
+                seq_hdr = CQCSequenceHeader()
+                # After this one we are sending n-i-1 more releases
+                seq_hdr.setVals(hdr_length * (n - i - 1))
+                release_messages += seq_hdr.pack()
+
+        self.write(cqc_msg + release_messages)
