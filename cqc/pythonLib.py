@@ -829,6 +829,10 @@ class CQCHandler(ABC):
         cmd_msg = cmd_hdr.pack()
 
         return msg + cmd_msg
+    
+    @abstractmethod
+    def sendCommand(self, qID, command, notify=1, block=1, action=0):
+        pass
 
     def constructCmdXtra(self, qID, command, notify=1, block=1, action=0, 
                          xtra_qID=0, step=0, remote_appID=0, remote_node=0, 
@@ -879,6 +883,11 @@ class CQCHandler(ABC):
         cmd_msg = cmd_hdr.pack()
 
         return msg + cmd_msg + xtra_msg
+    
+    @abstractmethod
+    def sendCmdXtra(self, qID, command, notify=1, block=1, action=0, xtra_qID=0, 
+                    step=0, remote_appID=0, remote_node=0, remote_port=0):
+        pass
 
     def construct_release(self, qubits, notify=True, block=False, action=False):
         """Construct command to release qubits
@@ -938,15 +947,6 @@ class CQCHandler(ABC):
 
     @abstractmethod
     def sendSimple(self, tp):
-        pass
-
-    @abstractmethod
-    def sendCommand(self, qID, command, notify=1, block=1, action=0):
-        pass
-
-    @abstractmethod
-    def sendCmdXtra(self, qID, command, notify=1, block=1, action=0, xtra_qID=0, 
-                    step=0, remote_appID=0, remote_node=0, remote_port=0):
         pass
 
     @abstractmethod
