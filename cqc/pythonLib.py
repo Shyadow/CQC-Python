@@ -953,6 +953,14 @@ class CQCHandler(ABC):
     def recvEPR(self):
         pass
 
+    @abstractmethod
+    def sendQubit(self):
+        pass
+
+    @abstractmethod
+    def recvQubit(self):
+        pass
+
 class CQCToFile(CQCHandler):
 
     def __init__(self, filename='CQC_File', pend_messages=False):
@@ -1012,7 +1020,7 @@ class CQCToFile(CQCHandler):
 
     def createEPR(self, name, remote_appID=0, notify=True, block=True):
 
-        remote_ip, remote_port = 0,0 #TODO: some function that assigns based on name
+        remote_ip, remote_port = 0,0 #TODO: some function that assigns based on name?
 
         # initialize the qubit
         q = qubit(self, createNew=False)
@@ -1082,6 +1090,57 @@ class CQCToFile(CQCHandler):
             q._set_active(True)
             return q
 
+    def sendQubit(self, name, remote_appID=0, notify=True, block=True):
+        
+        remote_ip, remote_port = 0,0 #TODO: some function that assigns based on name?
+
+        if self.pend_messages:
+            # print info
+            logging.debug(
+                "App {} pends message: 'Send qubit with ID {} to {} and appID {}'".format(
+                    self.name, q._qID, name, remote_appID
+                )
+            )
+            self.pending_messages.append(
+                [q, CQC_CMD_SEND, int(notify), int(block), [remote_appID, remote_ip, remote_port]]
+            )
+        else:
+            # print info
+            logging.debug(
+                "App {} tells CQC: 'Send qubit with ID {} to {} and appID {}'".format(
+                    self.name, q._qID, name, remote_appID
+                )
+            )
+            self.sendCmdXtra(q._qID, CQC_CMD_SEND, notify=int(notify), 
+                             block=int(block), remote_appID=remote_appID, 
+                             remote_node=remote_ip, remote_port=remote_port)
+
+            # Deactivate qubit
+            q._set_active(False)
+
+    def recvQubit(self, notify=True, block=True):
+
+        # initialize the qubit
+        q = qubit(self, createNew=False)
+
+        if self.pend_messages:
+            # print info
+            logging.debug("App {} pends message: 'Receive qubit'".format(self.name))
+            self.pending_messages.append([q, CQC_CMD_RECV, int(notify), int(block)])
+            return q
+        else:
+            # print info
+            logging.debug("App {} tells CQC: 'Receive qubit'".format(self.name))
+            self.sendCommand(0, CQC_CMD_RECV, notify=int(notify), block=int(block))
+
+            q_id = self.new_qubitID()
+
+            # initialize the qubit
+            q._qID = q_id
+
+            # Activate and return qubit
+            q._set_active(True)
+            return q
 
 class CQCConnection(CQCHandler):
 
