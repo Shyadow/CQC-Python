@@ -928,6 +928,18 @@ class CQCHandler(ABC):
 
         return cqc_msg + release_messages
 
+    def construct_simple(self, tp):
+        """Construct simple message, for example a HELLO message if tp=CQC_TP_HELLO.
+        """
+        hdr = CQCHeader()
+        hdr.setVals(CQC_VERSION, tp, self._appID, 0)
+        msg = hdr.pack()
+        return msg
+
+    @abstractmethod
+    def sendSimple(self, tp):
+        pass
+
     @abstractmethod
     def sendCommand(self, qID, command, notify=1, block=1, action=0):
         pass
