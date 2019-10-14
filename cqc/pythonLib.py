@@ -1154,6 +1154,11 @@ class CQCToFile(CQCHandler):
             q._set_active(True)
             return q
 
+    def sendSimple(self, tp):
+
+        msg = self.construct_simple(tp)
+        self.write(msg)
+
 class CQCConnection(CQCHandler):
 
     _appIDs = {}
@@ -1478,9 +1483,7 @@ class CQCConnection(CQCHandler):
         """
         Sends a simple message to the cqc server, for example a HELLO message if tp=CQC_TP_HELLO.
         """
-        hdr = CQCHeader()
-        hdr.setVals(CQC_VERSION, tp, self._appID, 0)
-        msg = hdr.pack()
+        msg = self.construct_simple(tp)
         self.send(msg)
 
     def sendCommand(self, qID, command, **kwds):
