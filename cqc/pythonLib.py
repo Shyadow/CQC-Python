@@ -953,6 +953,9 @@ class CQCToFile(CQCHandler):
         script_dir = sys.path[0]
         self.filename = os.path.join(script_dir, filename)
 
+        # Don't want notify when writing to file
+        self.notify = False
+
     def write(self, msg):
         """Writes a message to file
 
