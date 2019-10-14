@@ -258,6 +258,8 @@ class qubit:
         # Cqc connection
         self._cqc = cqc
 
+        self.notify = cqc.notify
+
         # Check if the cqc connection was openened using a 'with' statement
         # If not, raise a deprecation warning
         if not self._cqc._opened_with_with:
@@ -271,15 +273,7 @@ class qubit:
         self._active = None
 
         if createNew:
-            if type(self._cqc) is CQCToFile:
-
-                self._cqc.sendCommand(0, CQC_CMD_NEW, notify=int(notify), block=int(block))
-
-                self._qID = self._cqc.new_qubitID()
-
-                self._set_active(True)
-
-            elif cqc.pend_messages:
+            if cqc.pend_messages:
                 # print info
                 logging.debug("App {} pends message:'Create qubit'".format(self._cqc.name))
 
@@ -295,16 +289,15 @@ class qubit:
                 self._cqc.sendCommand(0, CQC_CMD_NEW, notify=int(notify), block=int(block))
 
                 # Get qubit id
-                message = self._cqc.readMessage()
                 try:
-                    otherHdr = message[1]
-                    self._qID = otherHdr.qubit_id
+                    self._qID = self._cqc.new_qubitID()
                 except AttributeError:
                     raise CQCGeneralError("Didn't receive the qubit id")
-                    # Activate qubit
+
+                # Activate qubit
                 self._set_active(True)
 
-                if notify:
+                if notify and self.notify:
                     message = self._cqc.readMessage()
                     self._cqc.print_CQC_msg(message)
         else:
@@ -416,7 +409,7 @@ class qubit:
             )
 
             self._cqc.sendCommand(self._qID, command, notify=int(notify), block=int(block))
-            if notify:
+            if notify and self.notify:
                 message = self._cqc.readMessage()
                 self._cqc.print_CQC_msg(message)
 
@@ -536,7 +529,7 @@ class qubit:
                 )
             )
             self._cqc.sendCmdXtra(self._qID, command, step=step, notify=int(notify), block=int(block))
-            if notify:
+            if notify and self.notify:
                 message = self._cqc.readMessage()
                 self._cqc.print_CQC_msg(message)
 
@@ -617,7 +610,7 @@ class qubit:
                 )
             )
             self._cqc.sendCmdXtra(self._qID, command, notify=int(notify), block=int(block), xtra_qID=target._qID)
-            if notify:
+            if notify and self.notify:
                 message = self._cqc.readMessage()
                 self._cqc.print_CQC_msg(message)
 
@@ -713,11 +706,7 @@ class qubit:
         # check if qubit is active
         self.check_active()
 
-        if type(self._cqc) is CQCToFile:
-
-            self._cqc.sendCommand(self._qID, CQC_CMD_RESET, notify=int(notify), block=int(block))
-
-        elif self._cqc.pend_messages:
+        if self._cqc.pend_messages:
             # print info
             logging.debug("App {} pends message: 'Reset qubit with ID {}'".format(self._cqc.name, self._qID))
 
@@ -727,7 +716,7 @@ class qubit:
             logging.debug("App {} tells CQC: 'Reset qubit with ID {}'".format(self._cqc.name, self._qID))
 
             self._cqc.sendCommand(self._qID, CQC_CMD_RESET, notify=int(notify), block=int(block))
-            if notify:
+            if notify and self.notify:
                 message = self._cqc.readMessage()
                 self._cqc.print_CQC_msg(message)
 
@@ -784,7 +773,7 @@ class CQCHandler(ABC):
     - get time?
     """
 
-    def __init__(self, pend_messages=False):
+    def __init__(self, pend_messages=False, notify=True):
 
         # Decides if to send each command as it is received, or all at once
         self.pend_messages = pend_messages
@@ -796,6 +785,9 @@ class CQCHandler(ABC):
         self.name = "CQCHandler"
 
         self.active_qubits = []
+
+        # This is a sort of global notify
+        self.notify = notify
 
     def __enter__(self):
         # This flag is used to check if CQCHandler is opened using a 'with' statement.
@@ -938,7 +930,7 @@ class CQCHandler(ABC):
                     step=0, remote_appID=0, remote_node=0, remote_port=0):
         pass
 
-    #@abstractmethod
+    @abstractmethod
     def new_qubitID(self):
         pass
 
@@ -1163,7 +1155,7 @@ class CQCConnection(CQCHandler):
 
         self._s.send(msg)
 
-    def close(self, release_qubits=True):
+    def close(self, release_qubits=True, notify=True):
         """
         Closes the connection. Releases all qubits
         """
@@ -1172,7 +1164,6 @@ class CQCConnection(CQCHandler):
                 msg = self.construct_release(self.active_qubits[:])
                 self.send(msg)
 
-                notify=True
                 if notify:
                     msg = self.readMessage()
                     self.check_error(msg[0])
@@ -1192,6 +1183,13 @@ class CQCConnection(CQCHandler):
 
         for name in list(self._classicalConn):
             self.closeClassicalChannel(name)
+
+    def new_qubitID(self):
+
+        msg = self.readMessage()
+        otherHdr = msg[1]
+
+        return otherHdr.qubit_id
 
     def startClassicalServer(self):
         """
