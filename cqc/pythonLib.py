@@ -759,7 +759,7 @@ class CQCHandler(ABC):
     """This class defines the things any CQCHandler must do.
 
     It is to be subclassed by the various actual classes that handle CQC, such
-    as CQCConnection.
+    as CQCConnection and CQCToFile.
     
     Essential things that a CQCHandler must do:
     - sendCommand/sendCmdXtra
@@ -771,6 +771,13 @@ class CQCHandler(ABC):
     - active qubits
     - release qubits
     - get time?
+
+    More general(?):
+    - construct commands
+    - send commands
+    - pend or not
+    - return qubit IDs
+    - pass back messages if those are expected
     """
 
     def __init__(self, pend_messages=False, notify=True):
@@ -938,6 +945,13 @@ class CQCHandler(ABC):
     def close(self, release_qubits=True):
         pass
 
+    @abstractmethod
+    def createEPR(self):
+        pass
+
+    @abstractmethod
+    def recvEPR(self):
+        pass
 
 class CQCToFile(CQCHandler):
 
@@ -995,6 +1009,79 @@ class CQCToFile(CQCHandler):
                                          block=False, action=False)
             
             self.write(msg)
+
+    def createEPR(self, name, remote_appID=0, notify=True, block=True):
+
+        remote_ip, remote_port = 0,0 #TODO: some function that assigns based on name
+
+        # initialize the qubit
+        q = qubit(self, createNew=False)
+
+        if self.pend_messages:
+            # print info
+            logging.debug(
+                "App {} pends message: 'Create EPR-pair with {} and appID {}'".format(self.name, name, remote_appID)
+            )
+
+            self.pending_messages.append(
+                [q, CQC_CMD_EPR, int(notify), int(block), [remote_appID, remote_ip, remote_port]]
+            )
+            return q
+        else:
+            # print info
+            logging.debug(
+                "App {} tells CQC: 'Create EPR-pair with {} and appID {}'".format(self.name, name, remote_appID)
+            )
+
+            self.sendCmdXtra(
+                0,
+                CQC_CMD_EPR,
+                notify=int(notify),
+                block=int(block),
+                remote_appID=remote_appID,
+                remote_node=remote_ip,
+                remote_port=remote_port,
+            )
+
+
+            entInfoHdr = None #TODO: create function that returns some fake entanglement info
+            q_id = self.new_qubitID()
+
+            q.set_entInfo(entInfoHdr)
+            q._qID = q_id
+
+            # Activate and return qubit
+            q._set_active(True)
+
+            return q
+
+    def recvEPR(self, notify=True, block=True):
+
+        # initialize the qubit
+        q = qubit(self, createNew=False)
+        if self.pend_messages:
+            # print info
+            logging.debug("App {} pends message: 'Receive half of EPR'".format(self.name))
+            self.pending_messages.append([q, CQC_CMD_EPR_RECV, int(notify), int(block)])
+            return q
+        else:
+            # print info
+            logging.debug("App {} tells CQC: 'Receive half of EPR'".format(self.name))
+            self.sendCommand(0, CQC_CMD_EPR_RECV, notify=int(notify), block=int(block))
+
+            
+            entInfoHdr = None #TODO: create function that returns some fake entanglement info
+            q_id = self.new_qubitID()
+
+
+            # initialize the qubit
+            q.set_entInfo(entInfoHdr)
+            q._qID = q_id
+
+            # Activate and return qubit
+            q._set_active(True)
+            return q
+
 
 class CQCConnection(CQCHandler):
 
