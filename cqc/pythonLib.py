@@ -671,15 +671,12 @@ class qubit:
 
             self._cqc.sendCommand(self._qID, command, notify=0, block=int(block))
 
-            # Return measurement outcome
-            message = self._cqc.readMessage()
             if not inplace:
                 self._set_active(False)
-            try:
-                otherHdr = message[1]
-                return otherHdr.outcome
-            except AttributeError:
-                return None
+
+            # Return measurement outcome
+
+            return self._cqc.return_meas_outcome()
 
     def reset(self, notify=True, block=True):
         """
@@ -961,6 +958,9 @@ class CQCHandler(ABC):
     def recvQubit(self):
         pass
 
+    @abstractmethod
+    def return_meas_outcome(self):
+        pass
 
 class CQCToFile(CQCHandler):
 
@@ -1148,6 +1148,8 @@ class CQCToFile(CQCHandler):
         msg = self.construct_simple(tp)
         self.write(msg)
 
+    def return_meas_outcome(self):
+        return 0
 
 class CQCConnection(CQCHandler):
 
@@ -2242,6 +2244,14 @@ class CQCConnection(CQCHandler):
                 return False
         return True
 
+    def return_meas_outcome(self):
 
+        msg = self.readMessage()
+
+        try:
+            otherHdr = message[1]
+            return otherHdr.outcome
+        except AttributeError:
+            return None
 
 
