@@ -389,11 +389,7 @@ class qubit:
         # check if qubit is active
         self.check_active()
 
-        if type(self._cqc) is CQCToFile:
-            
-            self._cqc.sendCommand(self._qID, command, notify=int(notify), block=int(block))
-
-        elif self._cqc.pend_messages:
+        if self._cqc.pend_messages:
             # print info
             logging.debug(
                 "App {} pends message: 'Send command {} for qubit with ID {}'".format(
@@ -509,11 +505,7 @@ class qubit:
         # check if qubit is active
         self.check_active()
 
-        if type(self._cqc) is CQCToFile:
-
-            self._cqc.sendCmdXtra(self._qID, command, step=step, notify=int(notify), block=int(block))
-
-        elif self._cqc.pend_messages:
+        if self._cqc.pend_messages:
             # print info
             logging.debug(
                 "App {} pends message: 'Perform rotation command {} (angle {}*2pi/256) to qubit with ID {}'".format(
@@ -590,11 +582,7 @@ class qubit:
         if self == target:
             raise CQCUnsuppError("Cannot perform multi qubit operation where control and target are the same")
 
-        if type(self._cqc) is CQCToFile:
-
-            self._cqc.sendCmdXtra(self._qID, command, notify=int(notify), block=int(block), xtra_qID=target._qID)
-
-        elif self._cqc.pend_messages:
+        if self._cqc.pend_messages:
             # print info
             logging.debug(
                 "App {} pends message: 'Perform CNOT to qubits with IDs {}(control) {}(target)'".format(
@@ -973,6 +961,7 @@ class CQCHandler(ABC):
     def recvQubit(self):
         pass
 
+
 class CQCToFile(CQCHandler):
 
     def __init__(self, filename='CQC_File', pend_messages=False):
@@ -1158,6 +1147,7 @@ class CQCToFile(CQCHandler):
 
         msg = self.construct_simple(tp)
         self.write(msg)
+
 
 class CQCConnection(CQCHandler):
 
