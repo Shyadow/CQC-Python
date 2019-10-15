@@ -650,17 +650,7 @@ class qubit:
         else:
             command = CQC_CMD_MEASURE
 
-        if type(self._cqc) is CQCToFile:
-
-            self._cqc.sendCommand(self._qID, command, notify=0, block=int(block))
-
-            if not inplace:
-                self._set_active(False)
-
-            # Always returns 0 as measurement outcome
-            return 0    
-
-        elif self._cqc.pend_messages:
+        if self._cqc.pend_messages:
             self._cqc.pending_messages.append([self, command, 0, int(block)])
             # print info
             logging.debug("App {} pends message: 'Measure qubit with ID {}'".format(self._cqc.name, self._qID))
