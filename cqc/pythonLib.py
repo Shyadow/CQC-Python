@@ -810,7 +810,7 @@ class CQCHandler(ABC):
         return msg + cmd_msg
     
     def sendCommand(self, qID, command, notify=1, block=1, action=0):
-        """Construct and send command."""
+        """Construct and commit command."""
         
         msg = self.construct_command(qID, command, notify=notify, block=block,
                                      action=action)
@@ -870,7 +870,7 @@ class CQCHandler(ABC):
     def sendCmdXtra(self, qID, command, notify=1, block=1, action=0, 
                     xtra_qID=0, step=0, remote_appID=0, remote_node=0, 
                     remote_port=0):
-        """Construct and send 'extra' command."""
+        """Construct and commit 'extra' command."""
         
         msg = self.constructCmdXtra(
             qID, command, notify=notify, block=block, action=action, 
@@ -942,7 +942,7 @@ class CQCHandler(ABC):
         return msg
 
     def sendSimple(self, tp):
-        """Construct and send simple message."""
+        """Construct and commit simple message."""
         
         msg = self.construct_simple(tp)
         self.commit(msg)
