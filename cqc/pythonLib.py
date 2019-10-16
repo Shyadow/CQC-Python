@@ -809,10 +809,12 @@ class CQCHandler(ABC):
 
         return msg + cmd_msg
     
-    @abstractmethod
     def sendCommand(self, qID, command, notify=1, block=1, action=0):
         """Construct and send command."""
-        pass
+        
+        msg = self.construct_command(qID, command, notify=notify, block=block,
+                                     action=action)
+        self.commit(msg)
 
     def constructCmdXtra(self, qID, command, notify=1, block=1, action=0, 
                          xtra_qID=0, step=0, remote_appID=0, remote_node=0, 
@@ -865,12 +867,16 @@ class CQCHandler(ABC):
 
         return msg + cmd_msg + xtra_msg
     
-    @abstractmethod
     def sendCmdXtra(self, qID, command, notify=1, block=1, action=0, 
                     xtra_qID=0, step=0, remote_appID=0, remote_node=0, 
                     remote_port=0):
         """Construct and send 'extra' command."""
-        pass
+        
+        msg = self.constructCmdXtra(
+            qID, command, notify=notify, block=block, action=action, 
+            xtra_qID=xtra_qID, step=step, remote_appID=remote_appID, 
+            remote_node=remote_node, remote_port=remote_port)
+        self.commit(msg)
 
     def construct_release(self, qubits, notify=True, block=False, 
                           action=False):
@@ -935,10 +941,11 @@ class CQCHandler(ABC):
         msg = hdr.pack()
         return msg
 
-    @abstractmethod
     def sendSimple(self, tp):
         """Construct and send simple message."""
-        pass
+        
+        msg = self.construct_simple(tp)
+        self.commit(msg)
 
     @abstractmethod
     def new_qubitID(self):
@@ -1003,7 +1010,7 @@ class CQCToFile(CQCHandler):
         # Don't want notify when writing to file
         self.notify = False
 
-    def write(self, msg):
+    def commit(self, msg):
         """Write a message to file.
 
         Message is written as the bytes turned into a string.
@@ -1011,18 +1018,6 @@ class CQCToFile(CQCHandler):
 
         with open(self.filename, 'a') as f:
             f.write(str(msg) + '\n')
-
-    def sendCommand(self, qID, command, **kwds):
-        """Construct command and write it to file."""
-        
-        msg = self.construct_command(qID, command, **kwds)
-        self.write(msg)
-
-    def sendCmdXtra(self, qID, command, **kwds):
-        """Construct 'extra' command and write it to file."""
-
-        msg = self.constructCmdXtra(qID, command, **kwds)
-        self.write(msg)
 
     def new_qubitID(self):
         """Provice new qubit ID."""
@@ -1166,12 +1161,6 @@ class CQCToFile(CQCHandler):
             # Activate and return qubit
             q._set_active(True)
             return q
-
-    def sendSimple(self, tp):
-        """Send simple message."""
-
-        msg = self.construct_simple(tp)
-        self.write(msg)
 
     def return_meas_outcome(self):
         """Return measurement outcome."""
@@ -1480,7 +1469,7 @@ class CQCConnection(CQCHandler):
 
         return self._appID
 
-    def send(self, msg):
+    def commit(self, msg):
         """Send message through the socket."""
 
         self._s.send(msg)
@@ -1648,35 +1637,6 @@ class CQCConnection(CQCHandler):
         logging.debug("App {}: Classical message {} to {} sent".format(self.name, to_send, name))
         if close_after:
             self.closeClassicalChannel(name)
-
-    def sendSimple(self, tp):
-        """Sends a simple message to the cqc server.
-        
-        For example a HELLO message if tp=CQC_TP_HELLO.
-        """
-        msg = self.construct_simple(tp)
-        self.send(msg)
-
-    def sendCommand(self, qID, command, **kwds):
-        """Sends command message to the cqc server.
-
-        - **Arguments**
-
-            :qID:        qubit ID
-            :command:    Command to be executed, eg CQC_CMD_H
-            :nofify:    Do we wish to be notified when done.
-            :block:        Do we want the qubit to be blocked
-            :action:    Are there more commands to be executed
-        """
-
-        msg = self.construct_command(qID, command, **kwds)
-        self.send(msg)
-
-    def sendCmdXtra(self, qID, command, **kwds):
-        """Send an 'extra' command message."""
-
-        msg = self.constructCmdXtra(qID, command, **kwds)
-        self.send(msg)
 
     def sendGetTime(self, qID, notify=1, block=1, action=0):
         """Sends get-time message
