@@ -975,6 +975,14 @@ class CQCHandler(ABC):
         """Return measurement outcome."""
         pass
 
+    @abstractmethod
+    def commit(self):
+        """Commit a message. 
+
+        This can mean sending it to the backend or just writing to file.
+        """
+        pass
+
 
 class CQCToFile(CQCHandler):
     """Handler to be used when writing the CQC commands to a file."""
