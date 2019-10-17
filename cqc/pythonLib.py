@@ -783,31 +783,6 @@ class CQCHandler(ABC):
     def __exit__(self, exc_type, exc_val, exc_tb):
         # All qubits should now be released
         self.close(release_qubits=True)
-
-    def construct_command(self, qID, command, notify=1, block=1, action=0):
-        """Construct a command.
-
-        - **Arguments**
-
-            :qID:         qubit ID
-            :command:     Command to be executed, eg CQC_CMD_H
-            :nofify:      Do we wish to be notified when done.
-            :block:       Do we want the qubit to be blocked
-            :action:      Are there more commands to be executed
-        """
-
-        # Construct and write Header
-        hdr = CQCHeader()
-        hdr.setVals(CQC_VERSION, CQC_TP_COMMAND, self._appID, 
-                    CQC_CMD_HDR_LENGTH)
-        msg = hdr.pack()
-
-        # Construct and write Command
-        cmd_hdr = CQCCmdHeader()
-        cmd_hdr.setVals(qID, command, notify, block, action)
-        cmd_msg = cmd_hdr.pack()
-
-        return msg + cmd_msg
     
     def sendCommand(self, qID, command, notify=1, block=1, action=0):
         """Construct and commit command."""
@@ -815,11 +790,14 @@ class CQCHandler(ABC):
         msg = self.construct_command(qID, command, notify=notify, block=block,
                                      action=action)
         self.commit(msg)
+    
+    def construct_command(self, qID, command, notify=1, block=1, action=0, 
+                          xtra_qID=0, step=0, remote_appID=0, remote_node=0, 
+                          remote_port=0):
+        """Construct a commmand.
 
-    def constructCmdXtra(self, qID, command, notify=1, block=1, action=0, 
-                         xtra_qID=0, step=0, remote_appID=0, remote_node=0, 
-                         remote_port=0):
-        """Construct an 'extra' command.
+        Extra arguments are only used if the command if of a type that 
+        needs them.
 
         - **Arguments**
 
@@ -835,7 +813,7 @@ class CQCHandler(ABC):
             :remote_port:       port of remote host in cqc network
         """
 
-        # Check what extra header we require
+        # Construct extra header if needed.
         xtra_hdr = None
         if command == CQC_CMD_SEND or command == CQC_CMD_EPR:
             xtra_hdr = CQCCommunicationHeader()
@@ -848,6 +826,7 @@ class CQCHandler(ABC):
             xtra_hdr = CQCRotationHeader()
             xtra_hdr.setVals(step)
 
+        # If xtra_hdr is None, we don't need an extra message.
         if xtra_hdr is None:
             header_length = CQC_CMD_HDR_LENGTH
             xtra_msg = b""
@@ -866,13 +845,14 @@ class CQCHandler(ABC):
         cmd_msg = cmd_hdr.pack()
 
         return msg + cmd_msg + xtra_msg
-    
+
+
     def sendCmdXtra(self, qID, command, notify=1, block=1, action=0, 
                     xtra_qID=0, step=0, remote_appID=0, remote_node=0, 
                     remote_port=0):
         """Construct and commit 'extra' command."""
         
-        msg = self.constructCmdXtra(
+        msg = self.construct_command(
             qID, command, notify=notify, block=block, action=action, 
             xtra_qID=xtra_qID, step=step, remote_appID=remote_appID, 
             remote_node=remote_node, remote_port=remote_port)
