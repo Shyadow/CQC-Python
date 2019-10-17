@@ -286,7 +286,7 @@ class qubit:
                 logging.debug("App {} tells CQC: 'Create qubit'".format(self._cqc.name))
 
                 # Create new qubit at the cqc server
-                self._cqc.sendCommand(0, CQC_CMD_NEW, notify=int(notify), block=int(block))
+                self._cqc.commit_command(0, CQC_CMD_NEW, notify=int(notify), block=int(block))
 
                 # Get qubit id
                 try:
@@ -404,7 +404,7 @@ class qubit:
                 "App {} tells CQC: 'Send command {} for qubit with ID {}'".format(self._cqc.name, command, self._qID)
             )
 
-            self._cqc.sendCommand(self._qID, command, notify=int(notify), block=int(block))
+            self._cqc.commit_command(self._qID, command, notify=int(notify), block=int(block))
             if notify and self.notify:
                 message = self._cqc.readMessage()
                 self._cqc.print_CQC_msg(message)
@@ -520,7 +520,7 @@ class qubit:
                     self._cqc.name, command, step, self._qID
                 )
             )
-            self._cqc.sendCmdXtra(self._qID, command, step=step, notify=int(notify), block=int(block))
+            self._cqc.commit_command(self._qID, command, step=step, notify=int(notify), block=int(block))
             if notify and self.notify:
                 message = self._cqc.readMessage()
                 self._cqc.print_CQC_msg(message)
@@ -597,7 +597,7 @@ class qubit:
                     self._cqc.name, self._qID, target._qID
                 )
             )
-            self._cqc.sendCmdXtra(self._qID, command, notify=int(notify), block=int(block), xtra_qID=target._qID)
+            self._cqc.commit_command(self._qID, command, notify=int(notify), block=int(block), xtra_qID=target._qID)
             if notify and self.notify:
                 message = self._cqc.readMessage()
                 self._cqc.print_CQC_msg(message)
@@ -659,7 +659,7 @@ class qubit:
             # print info
             logging.debug("App {} tells CQC: 'Measure qubit with ID {}'".format(self._cqc.name, self._qID))
 
-            self._cqc.sendCommand(self._qID, command, notify=0, block=int(block))
+            self._cqc.commit_command(self._qID, command, notify=0, block=int(block))
 
             if not inplace:
                 self._set_active(False)
@@ -690,7 +690,7 @@ class qubit:
             # print info
             logging.debug("App {} tells CQC: 'Reset qubit with ID {}'".format(self._cqc.name, self._qID))
 
-            self._cqc.sendCommand(self._qID, CQC_CMD_RESET, notify=int(notify), block=int(block))
+            self._cqc.commit_command(self._qID, CQC_CMD_RESET, notify=int(notify), block=int(block))
             if notify and self.notify:
                 message = self._cqc.readMessage()
                 self._cqc.print_CQC_msg(message)
@@ -783,12 +783,16 @@ class CQCHandler(ABC):
     def __exit__(self, exc_type, exc_val, exc_tb):
         # All qubits should now be released
         self.close(release_qubits=True)
-    
-    def sendCommand(self, qID, command, notify=1, block=1, action=0):
+
+    def commit_command(self, qID, command, notify=1, block=1, action=0, 
+                    xtra_qID=0, step=0, remote_appID=0, remote_node=0, 
+                    remote_port=0):
         """Construct and commit command."""
-        
-        msg = self.construct_command(qID, command, notify=notify, block=block,
-                                     action=action)
+
+        msg = self.construct_command(
+            qID, command, notify=notify, block=block, action=action, 
+            xtra_qID=xtra_qID, step=step, remote_appID=remote_appID, 
+            remote_node=remote_node, remote_port=remote_port)
         self.commit(msg)
     
     def construct_command(self, qID, command, notify=1, block=1, action=0, 
@@ -845,18 +849,6 @@ class CQCHandler(ABC):
         cmd_msg = cmd_hdr.pack()
 
         return msg + cmd_msg + xtra_msg
-
-
-    def sendCmdXtra(self, qID, command, notify=1, block=1, action=0, 
-                    xtra_qID=0, step=0, remote_appID=0, remote_node=0, 
-                    remote_port=0):
-        """Construct and commit 'extra' command."""
-        
-        msg = self.construct_command(
-            qID, command, notify=notify, block=block, action=action, 
-            xtra_qID=xtra_qID, step=step, remote_appID=remote_appID, 
-            remote_node=remote_node, remote_port=remote_port)
-        self.commit(msg)
 
     def construct_release(self, qubits, notify=True, block=False, 
                           action=False):
@@ -1042,7 +1034,7 @@ class CQCToFile(CQCHandler):
                 "App {} tells CQC: 'Create EPR-pair with {} and appID {}'".format(self.name, name, remote_appID)
             )
 
-            self.sendCmdXtra(0, CQC_CMD_EPR, notify=int(notify), 
+            self.commit_command(0, CQC_CMD_EPR, notify=int(notify), 
                              block=int(block), remote_appID=remote_appID, 
                              remote_node=remote_ip, remote_port=remote_port)
 
@@ -1071,7 +1063,7 @@ class CQCToFile(CQCHandler):
         else:
             # print info
             logging.debug("App {} tells CQC: 'Receive half of EPR'".format(self.name))
-            self.sendCommand(0, CQC_CMD_EPR_RECV, notify=int(notify), 
+            self.commit_command(0, CQC_CMD_EPR_RECV, notify=int(notify), 
                              block=int(block))
 
             
@@ -1106,7 +1098,7 @@ class CQCToFile(CQCHandler):
             logging.debug(
                 "App {} tells CQC: 'Send qubit with ID {} to {} and appID {}'"
                 .format(self.name, q._qID, name, remote_appID))
-            self.sendCmdXtra(q._qID, CQC_CMD_SEND, notify=int(notify), 
+            self.commit_command(q._qID, CQC_CMD_SEND, notify=int(notify), 
                              block=int(block), remote_appID=remote_appID, 
                              remote_node=remote_ip, remote_port=remote_port)
 
@@ -1130,7 +1122,7 @@ class CQCToFile(CQCHandler):
             # print info
             logging.debug("App {} tells CQC: 'Receive qubit'"
                           .format(self.name))
-            self.sendCommand(0, CQC_CMD_RECV, notify=int(notify), 
+            self.commit_command(0, CQC_CMD_RECV, notify=int(notify), 
                              block=int(block))
 
             q_id = self.new_qubitID()
@@ -1983,7 +1975,7 @@ class CQCConnection(CQCHandler):
                     self.name, q._qID, name, remote_appID
                 )
             )
-            self.sendCmdXtra(q._qID, CQC_CMD_SEND, notify=int(notify), 
+            self.commit_command(q._qID, CQC_CMD_SEND, notify=int(notify), 
                              block=int(block), remote_appID=remote_appID, 
                              remote_node=remote_ip, remote_port=remote_port)
 
@@ -2017,7 +2009,7 @@ class CQCConnection(CQCHandler):
         else:
             # print info
             logging.debug("App {} tells CQC: 'Receive qubit'".format(self.name))
-            self.sendCommand(0, CQC_CMD_RECV, notify=int(notify), block=int(block))
+            self.commit_command(0, CQC_CMD_RECV, notify=int(notify), block=int(block))
 
             # Get RECV message
             message = self.readMessage()
@@ -2070,7 +2062,7 @@ class CQCConnection(CQCHandler):
                 "App {} tells CQC: 'Create EPR-pair with {} and appID {}'".format(self.name, name, remote_appID)
             )
 
-            self.sendCmdXtra(
+            self.commit_command(
                 0,
                 CQC_CMD_EPR,
                 notify=int(notify),
@@ -2116,7 +2108,7 @@ class CQCConnection(CQCHandler):
         else:
             # print info
             logging.debug("App {} tells CQC: 'Receive half of EPR'".format(self.name))
-            self.sendCommand(0, CQC_CMD_EPR_RECV, notify=int(notify), block=int(block))
+            self.commit_command(0, CQC_CMD_EPR_RECV, notify=int(notify), block=int(block))
 
             # Get RECV message
             message = self.readMessage()
