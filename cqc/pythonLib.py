@@ -1007,7 +1007,7 @@ class CQCToFile(CQCHandler):
 
             msg = self.construct_release(self.active_qubits[:], notify=True, 
                                          block=False, action=False)
-            self.write(msg)
+            self.commit(msg)
 
     def createEPR(self, name, remote_appID=0, notify=True, block=True):
         """Create EPR pair."""
@@ -1258,7 +1258,7 @@ class CQCToFile(CQCHandler):
             # send the headers
             for header in pending_headers:
                 logging.debug("App {} sends CQC: {}".format(self.name, header.printable()))
-                self.write(header.pack())
+                self.commit(header.pack())
 
             # Read out any returned messages from the backend
             for i in range(num_iter):
