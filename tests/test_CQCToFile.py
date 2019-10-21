@@ -59,3 +59,20 @@ def test_createqubit(tmpdir):
 
             assert line[6:10] == "\\x01"
             assert line[42:46] == "\\x01"
+
+def test_releasequbit(tmpdir):
+
+    filename=os.path.join(tmpdir,'CQC_File')
+
+    with CQCToFile(filename=filename) as cqc:
+
+        q = qubit(cqc)
+
+    with open(filename) as f:
+            
+        line = f.readline()
+        line = f.readline()
+        print(line)
+
+        assert line[6:10] == "\\x01"
+        assert line[42:46] == "\\x17"
