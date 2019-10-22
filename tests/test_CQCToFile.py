@@ -131,3 +131,20 @@ def test_flushing(tmpdir):
         cqc.flush()
 
         assert not cqc.pending_messages 
+
+def test_qubitIDs(tmpdir):
+
+    filename=os.path.join(tmpdir,'CQC_File')
+
+    with CQCToFile(filename=filename) as cqc:
+
+        a = qubit(cqc)
+        a.X()
+        b = qubit(cqc)
+        b.Z()
+        c = qubit(cqc)
+        c.H()
+
+        assert a._qID == 0
+        assert b._qID == 1
+        assert c._qID == 2
