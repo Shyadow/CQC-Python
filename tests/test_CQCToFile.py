@@ -148,3 +148,13 @@ def test_qubitIDs(tmpdir):
         assert a._qID == 0
         assert b._qID == 1
         assert c._qID == 2
+
+def test_measurement(tmpdir):
+
+    filename=os.path.join(tmpdir,'CQC_File')
+
+    with CQCToFile(filename=filename) as cqc:
+
+        q = qubit(cqc)
+        a = q.measure()
+        assert a == 0
