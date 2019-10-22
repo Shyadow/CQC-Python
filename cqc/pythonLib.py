@@ -1079,7 +1079,8 @@ class CQCToFile(CQCHandler):
             q._set_active(True)
             return q
 
-    def sendQubit(self, name, remote_appID=0, notify=True, block=True):
+    def sendQubit(self, q, name, remote_appID=0, remote_socket=None, 
+                  notify=True, block=True):
         """Send qubit."""
 
         remote_ip, remote_port = 0,0 #TODO: some function that assigns based on name?
