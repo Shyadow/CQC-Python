@@ -76,3 +76,33 @@ def test_releasequbit(tmpdir):
 
         assert line[6:10] == "\\x01"
         assert line[42:46] == "\\x17"
+
+def test_Hgate(tmpdir):
+
+    filename=os.path.join(tmpdir,'CQC_File')
+
+    with CQCToFile(filename=filename) as cqc:
+
+        q = qubit(cqc)
+        q.H()
+
+    with open(filename) as f:
+            
+        line = f.readline()
+        line = f.readline()
+        print(line)
+
+        assert line[6:10] == "\\x01"
+        assert line[42:46] == "\\x11"
+
+def test_some_combinations(tmpdir):
+
+    filename=os.path.join(tmpdir,'CQC_File')
+
+    with CQCToFile(filename=filename) as cqc:
+
+        q = cqc.createEPR("Alice")
+        q.H()
+        a = qubit(cqc)
+        a.cnot(q)
+        cqc.sendQubit(a, "Alice")
