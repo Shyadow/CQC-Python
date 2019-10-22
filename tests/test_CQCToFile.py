@@ -106,3 +106,28 @@ def test_some_combinations(tmpdir):
         a = qubit(cqc)
         a.cnot(q)
         cqc.sendQubit(a, "Alice")
+
+        c = cqc.recvQubit()
+        d = cqc.recvEPR()
+        c.H()
+        d.H()
+        c.cnot(d)
+
+def test_flushing(tmpdir):
+
+    filename=os.path.join(tmpdir,'CQC_File')
+
+    with CQCToFile(filename=filename, pend_messages=True) as cqc:
+
+        assert not cqc.pending_messages
+
+        q = qubit(cqc)
+        q.H()
+        q.X()
+        q.Z()
+
+        assert cqc.pending_messages
+
+        cqc.flush()
+
+        assert not cqc.pending_messages 
