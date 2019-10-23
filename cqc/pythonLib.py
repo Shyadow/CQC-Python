@@ -35,6 +35,7 @@ import logging
 import socket
 import warnings
 from abc import ABC, abstractmethod
+import struct
 
 from cqc.cqcHeader import (
     Header,
@@ -991,6 +992,9 @@ class CQCToFile(CQCHandler):
         with open(self.filename, 'a') as f:
             f.write(str(msg) + '\n')
 
+        with open(self.filename+"binary", 'ab') as f:
+            f.write(msg)
+
     def new_qubitID(self):
         """Provice new qubit ID."""
 
@@ -1282,6 +1286,45 @@ class CQCToFile(CQCHandler):
                             res.append(q)
    
         return res
+
+    def parse_test(self):
+        """Should read the contents written to file and recover the CQC.
+        """
+
+        with open(self.filename+"binary", 'rb') as f:
+            contents = f.read()
+            cqc_header = contents[0:8]
+            print(cqc_header)
+            values = struct.unpack("!BBHL", cqc_header)
+            print("Version {}, Command Type {}, App ID {}, Length {}".format(
+                *values))
+
+            remaining_length = values[3]
+            command_type = values[1]
+            marker = 8
+            while True:
+                if command_type == 1:
+                    command = contents[marker:marker+4]
+                    marker += 4
+                    remaining_length -= 4
+                    values = struct.unpack("!HBB", command)
+                    print("Qubit {}, Command {}, Options {}".format(*values))
+
+                if remaining_length == 0:
+                    cqc_header = contents[marker:marker+8]
+                    if cqc_header == b'':
+                        break
+                    marker += 8
+                    values = struct.unpack("!BBHL", cqc_header)
+                    remaining_length = values[3]
+                    command_type = values[1]
+                    print("Version {}, Command Type {}, App ID {}, Length {}"
+                          .format(*values))
+                
+            #values = struct.unpack("!BBHL", bytes(line))
+            #while line:
+            #    line = f.readline().strip()
+            #    print(line)
 
 
 class CQCConnection(CQCHandler):
