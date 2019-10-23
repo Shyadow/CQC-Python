@@ -1310,6 +1310,32 @@ class CQCToFile(CQCHandler):
                     values = struct.unpack("!HBB", command)
                     print("Qubit {}, Command {}, Options {}".format(*values))
 
+                    if values[1] in (14, 15, 16):
+                        # Rotation gates
+                        rotation = contents[marker:marker+1]
+                        marker +=1
+                        remaining_length -= 1
+                        rot = struct.unpack("!B", rotation)
+                        print("Rotation {}*2*pi/256 radians".format(rot[0]))
+
+                    elif values[1] in (20, 21):
+                        # CNOT and CPHASE gates
+                        targetid = contents[marker:marker+2]
+                        marker += 2
+                        remaining_length -= 2
+                        target = struct.unpack("!H", targetid)
+                        print("Target qubit {}".format(target[0]))
+
+                    if values[2] in (2, 3, 6, 10, 7, 11, 16, 17):
+                        # Action flag
+                        rem = contents[marker:marker+1]
+                        marker += 1
+                        remaining_length -= 1
+                        rem = struct.unpack("!B", rem)
+                        remaining_length = rem[0]
+                        print("Sequence has {} remaining length."
+                              .format(rem[0]))
+
                 if remaining_length == 0:
                     cqc_header = contents[marker:marker+8]
                     if cqc_header == b'':
