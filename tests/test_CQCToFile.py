@@ -19,18 +19,6 @@ def test_name(tmpdir):
     with CQCToFile(filename=filename) as cqc:
         assert cqc.name == 'CQCToFile'
 
-def test_tempdir(tmpdir):
-
-    filename=os.path.join(tmpdir,'CQC_File')
-
-    with CQCToFile(filename=filename) as cqc:
-
-        cqc.commit('test')        
-        
-        with open(filename) as f:
-            contents = f.read()
-            assert contents == 'test\n'
-
 def test_sendSimple(tmpdir):
 
     filename=os.path.join(tmpdir,'CQC_File')

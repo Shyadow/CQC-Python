@@ -995,16 +995,20 @@ class CQCToFile(CQCHandler):
             except FileNotFoundError:
                 pass
         else:
-            # Append number to filename if can't overwrite
-            num = 0
-            while True:
-                if (os.path.isfile(self.filename + str(num)) 
-                    or os.path.isfile(self.filename +str(num) + "binary")):
-                    num += 1
-                else:
-                    self.filename = self.filename + str(num)
-                    self.filenameb = self.filename + "binary"
-                    break 
+            if not (os.path.isfile(self.filename) 
+                    or os.path.isfile(self.filename + "binary")):
+                pass
+            else:
+                # Append number to filename if can't overwrite
+                num = 0
+                while True:
+                    if (os.path.isfile(self.filename + str(num)) 
+                        or os.path.isfile(self.filename +str(num) + "binary")):
+                        num += 1
+                    else:
+                        self.filename = self.filename + str(num)
+                        self.filenameb = self.filename + "binary"
+                        break 
 
         # Don't want notify when writing to file
         self.notify = False
@@ -1015,11 +1019,12 @@ class CQCToFile(CQCHandler):
         Message is written as the bytes turned into a string.
         """
 
-        with open(self.filename, 'a') as f:
-            f.write(str(msg) + '\n')
-
-        with open(self.filenameb, 'ab') as f:
-            f.write(msg)
+        if not msg is None:
+            with open(self.filename, 'a') as f:
+                f.write(str(msg) + '\n')
+    
+            with open(self.filenameb, 'ab') as f:
+                f.write(msg)
 
     def new_qubitID(self):
         """Provice new qubit ID."""
