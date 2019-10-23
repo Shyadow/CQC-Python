@@ -967,7 +967,8 @@ class CQCHandler(ABC):
 class CQCToFile(CQCHandler):
     """Handler to be used when writing the CQC commands to a file."""
 
-    def __init__(self, filename='CQC_File', pend_messages=False):
+    def __init__(self, filename='CQC_File', pend_messages=False,
+                 overwrite=False):
 
         # Call init of CQCHandler
         super().__init__(pend_messages = pend_messages)
@@ -979,6 +980,31 @@ class CQCToFile(CQCHandler):
         # Set path of file to write to
         script_dir = sys.path[0]
         self.filename = os.path.join(script_dir, filename)
+        self.filenameb = self.filename+"binary"
+
+        # Check if file exists
+        if overwrite:
+            # Remove file if we can overwrite
+            try:
+                os.remove(self.filename)
+            except FileNotFoundError:
+                pass
+            
+            try:
+                os.remove(self.filenameb)
+            except FileNotFoundError:
+                pass
+        else:
+            # Append number to filename if can't overwrite
+            num = 0
+            while True:
+                if (os.path.isfile(self.filename + str(num)) 
+                    or os.path.isfile(self.filename +str(num) + "binary")):
+                    num += 1
+                else:
+                    self.filename = self.filename + str(num)
+                    self.filenameb = self.filename + "binary"
+                    break 
 
         # Don't want notify when writing to file
         self.notify = False
@@ -992,7 +1018,7 @@ class CQCToFile(CQCHandler):
         with open(self.filename, 'a') as f:
             f.write(str(msg) + '\n')
 
-        with open(self.filename+"binary", 'ab') as f:
+        with open(self.filenameb, 'ab') as f:
             f.write(msg)
 
     def new_qubitID(self):
@@ -1291,7 +1317,7 @@ class CQCToFile(CQCHandler):
         """Should read the contents written to file and recover the CQC.
         """
 
-        with open(self.filename+"binary", 'rb') as f:
+        with open(self.filenameb, 'rb') as f:
             contents = f.read()
             cqc_header = contents[0:8]
             print(cqc_header)
